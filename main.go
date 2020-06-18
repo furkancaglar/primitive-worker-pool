@@ -1,14 +1,15 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"math/rand"
 	"runtime"
+	"sync"
 	"time"
 )
 
 func main() {
-	log.Printf("App Starting..\nCurrent total goroutine number=%v\n", runtime.NumGoroutine())
+	fmt.Printf("\nApp Starting..\nCurrent total goroutine number=%v\n\n\n", runtime.NumGoroutine())
 
 	run()
 
@@ -17,7 +18,7 @@ func main() {
 	// so logging will not work correctly
 	runtime.GC()
 
-	log.Printf("Sutting Down..\nCurrent total goroutine number=%v\n", runtime.NumGoroutine())
+	fmt.Printf("\n\n\nSutting Down..\nCurrent total goroutine number=%v\n", runtime.NumGoroutine())
 
 }
 
@@ -32,20 +33,11 @@ const (
 	RANDOM_INTEGERS_MIN = 1
 )
 
-type (
-	// send all of the goroutines to let them know there is no more
-	// job coming so they shut themselves down.
-	// that means each goroutine will read from this channel exactly once
-	// so a basic for loop will be enough to wait for all goroutines to
-	// finish their last job.
-	signalEndOfJobs struct{}
-)
-
 var (
-	chnInteger              chan int32
-	chnSignalEndOfJobs      chan signalEndOfJobs
+	chnInteger chan int32
+	wg         *sync.WaitGroup
 
-	// FOR LOGGING
+	// FOR LOGGING ONLY
 	goRoutineCounter = NUMBER_OF_GOROUTINES
 )
 
@@ -54,17 +46,18 @@ func run() {
 	rand.Seed(time.Now().UnixNano())
 
 	chnInteger = make(chan int32)
-	chnSignalEndOfJobs = make(chan signalEndOfJobs)
+	wg = new(sync.WaitGroup)
+	wg.Add(NUMBER_OF_GOROUTINES)
 
 	initGoRoutines()
 
-	log.Printf("%v goroutine ready for executing jobs..\nCurrent total goroutine number=%v\n", NUMBER_OF_GOROUTINES, runtime.NumGoroutine())
+	fmt.Printf("%v goroutine ready for executing jobs..\nCurrent total goroutine number=%v\n", NUMBER_OF_GOROUTINES, runtime.NumGoroutine())
 
 	writeNumbers()
 
-	log.Printf("END of jobs: all jobs are channeled into executer gorouines..\nCurrent total goroutine number=%v\n", runtime.NumGoroutine())
+	fmt.Printf("\n\nEND of jobs: all jobs are channeled into executer gorouines..\nCurrent total goroutine number=%v\n\n", runtime.NumGoroutine())
 
-	waitForLastGoRoutine()
+	wg.Wait()
 }
 
 func initGoRoutines() {
@@ -78,12 +71,8 @@ func writeNumbers() {
 		rnd := rand.Int31n(RANDOM_INTEGERS_MAX-RANDOM_INTEGERS_MIN) + RANDOM_INTEGERS_MIN
 		chnInteger <- rnd
 	}
-}
 
-func waitForLastGoRoutine() {
-	for i := 0; i < NUMBER_OF_GOROUTINES; i++ {
-		chnSignalEndOfJobs <- struct{}{}
-	}
+	close(chnInteger)
 }
 
 func execute() {
@@ -91,13 +80,12 @@ func execute() {
 		select {
 		case i, ok := <-chnInteger:
 			if !ok {
+				fmt.Printf("Current total goroutine number=%v\nnumber %v goroutine is shutting down..\n", runtime.NumGoroutine(), goRoutineCounter)
+				goRoutineCounter--
+				wg.Done()
 				return
 			}
 			time.Sleep(time.Millisecond * time.Duration(i))
-		case <-chnSignalEndOfJobs:
-			log.Printf("number %v goroutine is shutting down..\nCurrent total goroutine number=%v", goRoutineCounter, runtime.NumGoroutine())
-			goRoutineCounter--
-			return
 		}
 	}
 }
