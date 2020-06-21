@@ -45,7 +45,9 @@ func run() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	chnInteger = make(chan int32)
+	// create a buffered channel with the number of executers
+	// so executers won't wait unnecessarily
+	chnInteger = make(chan int32, NUMBER_OF_GOROUTINES)
 	wg = new(sync.WaitGroup)
 	wg.Add(NUMBER_OF_GOROUTINES)
 
