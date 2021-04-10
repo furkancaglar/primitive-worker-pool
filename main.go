@@ -25,20 +25,12 @@ func main() {
 // application configs
 const (
 	NUMBER_OF_GOROUTINES = 7
-	NUMBER_OF_JOBS       = 10
+	NUMBER_OF_JOBS       = NUMBER_OF_GOROUTINES
 )
 
 const (
 	RANDOM_INTEGERS_MAX = 10000
 	RANDOM_INTEGERS_MIN = 1
-)
-
-var (
-	chnInteger chan int32
-	wg         *sync.WaitGroup
-
-	// FOR LOGGING ONLY
-	goRoutineCounter = NUMBER_OF_GOROUTINES
 )
 
 func run() {
@@ -47,28 +39,28 @@ func run() {
 
 	// create a buffered channel with the number of executers
 	// so executers won't wait unnecessarily
-	chnInteger = make(chan int32, NUMBER_OF_GOROUTINES)
-	wg = new(sync.WaitGroup)
+	chnInteger := make(chan int32, NUMBER_OF_GOROUTINES)
+	wg := &sync.WaitGroup{}
 	wg.Add(NUMBER_OF_GOROUTINES)
 
-	initGoRoutines()
+	initGoRoutines(wg, chnInteger)
 
-	fmt.Printf("%v goroutine ready for executing jobs..\nCurrent total goroutine number=%v\n", NUMBER_OF_GOROUTINES, runtime.NumGoroutine())
+	fmt.Printf("%v goroutines are ready for executing jobs..\nCurrent total goroutine number=%v\n", NUMBER_OF_GOROUTINES, runtime.NumGoroutine())
 
-	writeNumbers()
+	writeNumbers(chnInteger)
 
 	fmt.Printf("\n\nEND of jobs: all jobs are channeled into executer gorouines..\nCurrent total goroutine number=%v\n\n", runtime.NumGoroutine())
 
 	wg.Wait()
 }
 
-func initGoRoutines() {
+func initGoRoutines(wg *sync.WaitGroup, chnInteger chan int32) {
 	for i := 0; i < NUMBER_OF_GOROUTINES; i++ {
-		go execute()
+		go execute(wg, chnInteger)
 	}
 }
 
-func writeNumbers() {
+func writeNumbers(chnInteger chan<- int32) {
 	for i := 0; i < NUMBER_OF_JOBS; i++ {
 		rnd := rand.Int31n(RANDOM_INTEGERS_MAX-RANDOM_INTEGERS_MIN) + RANDOM_INTEGERS_MIN
 		chnInteger <- rnd
@@ -77,17 +69,12 @@ func writeNumbers() {
 	close(chnInteger)
 }
 
-func execute() {
-	for {
-		select {
-		case i, ok := <-chnInteger:
-			if !ok {
-				fmt.Printf("Current total goroutine number=%v\nnumber %v goroutine is shutting down..\n", runtime.NumGoroutine(), goRoutineCounter)
-				goRoutineCounter--
-				wg.Done()
-				return
-			}
-			time.Sleep(time.Millisecond * time.Duration(i))
-		}
+func execute(wg *sync.WaitGroup, chnInteger <-chan int32) {
+	for i := range chnInteger {
+		// the actually job is just waiting :D
+		time.Sleep(time.Millisecond * time.Duration(i))
 	}
+
+	fmt.Printf("Current total goroutine number=%v\n", runtime.NumGoroutine())
+	wg.Done()
 }
